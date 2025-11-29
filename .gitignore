@@ -4,4 +4,5 @@
 /checkpoint_epoch_inception_8.pth
 /checkpoint_epoch_inception_9.pth
 /ImageNet10
+/ImageNet1000
 /__pycache__
