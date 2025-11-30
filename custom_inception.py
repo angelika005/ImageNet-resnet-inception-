@@ -207,7 +207,7 @@ class ReductionA(nn.Module):
         
         self.branch2_conv = ConvBNReLU(in_channels, 384, 3, stride=2, padding=0)
 
-        self.branch3_pool = nn.MaxPool2d(3, stride=2, padding=1)
+        self.branch3_pool = nn.MaxPool2d(3, stride=2, padding=0)
         
     def forward(self, x):
         b1 = self.branch1_conv1(x)
