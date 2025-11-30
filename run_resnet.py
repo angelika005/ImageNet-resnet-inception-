@@ -186,6 +186,11 @@ def test_model(test_loader, num_classes=1000):
     print(f'Test Recall: {recall:.4f}')
     print(f'Test F1 Score: {f1:.4f}')
 
+    print("\n" + "="*50)
+    print("Sample Predictions:")
+    print("="*50)
+    visualize_predictions(model, test_loader, device, num_samples=5)
+
     wandb.init(project="ImageNetClassification", job_type="evaluation")
     wandb.log({
         "test_accuracy": accuracy,
@@ -195,7 +200,42 @@ def test_model(test_loader, num_classes=1000):
     })
     wandb.finish()
 
+
+def visualize_predictions(model, test_loader, device, num_samples=5):
+
+    with open("names.yaml", "r") as f:
+        class_names = [line.strip() for line in f.readlines()]
+    
+    model.eval()
+    samples_shown = 0
+    
+    with torch.no_grad():
+        for inputs, labels in test_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            outputs = model(inputs)
+
+            probs = torch.nn.functional.softmax(outputs, dim=1)
+            top5_probs, top5_indices = probs.topk(5, dim=1)
+            
+            for i in range(min(inputs.size(0), num_samples - samples_shown)):
+                true_label = labels[i].item()
+                pred_label = top5_indices[i][0].item()
+                
+                print(f"\n--- Sample {samples_shown + 1} ---")
+                print(f"True class: {class_names[true_label]} (ID: {true_label})")
+                print(f"Predicted class: {class_names[pred_label]} (ID: {pred_label})")
+                print(f"Correct: {'✓' if true_label == pred_label else '✗'}")
+                print("\nTop-5 predictions:")
+                for j in range(5):
+                    idx = top5_indices[i][j].item()
+                    prob = top5_probs[i][j].item()
+                    print(f"  {j+1}. {class_names[idx]}: {prob*100:.2f}%")
+                
+                samples_shown += 1
+                if samples_shown >= num_samples:
+                    return
+
 if __name__ == '__main__':  
     train_loader, val_loader, test_loader = data_loading(batch_size=config_resnet["batch_size"], num_workers=8)
-    train_model(train_loader, val_loader)
+    #train_model(train_loader, val_loader)
     test_model(test_loader, num_classes=config_resnet["num_classes"])
