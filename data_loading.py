@@ -22,16 +22,16 @@ def data_preparation():
     imagenet_std  = (0.229, 0.224, 0.225)
 
     train_transform = transforms.Compose([
-        transforms.Resize(256),#resnet-256, inception-342
-        transforms.RandomCrop(224),#resnet-224, inception-299
+        transforms.Resize(342),#resnet-256, inception-342
+        transforms.RandomCrop(299),#resnet-224, inception-299
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.ToTensor(),
         transforms.Normalize(imagenet_mean, imagenet_std)
     ])
     
     val_test_transform = transforms.Compose([
-        transforms.Resize(256),#resnet-256, inception-342
-        transforms.CenterCrop(224),#resnet-224, inception-299
+        transforms.Resize(342),#resnet-256, inception-342
+        transforms.CenterCrop(299),#resnet-224, inception-299
         transforms.ToTensor(),
         transforms.Normalize(imagenet_mean,
                          imagenet_std)

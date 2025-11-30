@@ -1,15 +1,15 @@
-from custom_resnet_50 import ResNet, ResidualBlock
+from custom_inception import InceptionV3
 import torch.nn as nn
 from torch import optim
 import torch
 from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 from data_loading import data_loading
 import wandb
-from config import config_resnet
+from config import config_inceptionV3
 import os
 
 def load_model_for_test(filepath, device, num_classes=1000):
-    model = ResNet(ResidualBlock, [3,4,6,3], num_classes=num_classes)
+    model = InceptionV3(config_inceptionV3["num_classes"])
     model.load_state_dict(torch.load(filepath, map_location=device, weights_only=True))
     model.to(device)
     model.eval()
@@ -22,21 +22,21 @@ def top_k_accuracy(outputs, labels, k=5):
 
 def train_model(train_loader, val_loader):
     os.environ["WANDB_MODE"]="offline"
-    save_dir = "saved_files_resnet"
+    save_dir = "saved_files_inception"
     os.makedirs(save_dir, exist_ok=True)
     wandb.init(
     project="ImageNetClassification",
-    config=config_resnet,
-    name=f"resnet50_lr{config_resnet['learning_rate']}_bs{config_resnet['batch_size']}")
+    config=config_inceptionV3,
+    name=f"inceptionV3_lr{config_inceptionV3['learning_rate']}_bs{config_inceptionV3['batch_size']}")
 
-    num_epochs = config_resnet["epochs"]
+    num_epochs = config_inceptionV3["epochs"]
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = ResNet(ResidualBlock, [3,4,6,3], num_classes=config_resnet["num_classes"]).to(device)
+    model = InceptionV3(config_inceptionV3["num_classes"]).to(device)
 
     wandb.watch(model, log="all", log_freq=100)
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=config_resnet["learning_rate"], momentum=config_resnet["momentum"], weight_decay=config_resnet["weight_decay"])
+    optimizer = optim.SGD(model.parameters(), lr=config_inceptionV3["learning_rate"], momentum=config_inceptionV3["momentum"], weight_decay=config_inceptionV3["weight_decay"])
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 
     print('Started training')
@@ -53,8 +53,10 @@ def train_model(train_loader, val_loader):
             inputs, labels = inputs.to(device, non_blocking=True), labels.to(device, non_blocking=True)
 
             optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
+            outputs, aux_outputs = model(inputs)
+            loss_aux = criterion(aux_outputs, labels)
+            loss_main = criterion(outputs, labels)
+            loss = loss_main + config_inceptionV3["aux_weight"]*loss_aux
             loss.backward()
             optimizer.step()
 
@@ -88,7 +90,7 @@ def train_model(train_loader, val_loader):
         with torch.no_grad():
             for inputs, labels in val_loader:
                 inputs, labels = inputs.to(device, non_blocking=True), labels.to(device, non_blocking=True)
-                outputs = model(inputs)
+                outputs, _ = model(inputs)
 
                 _, topk_preds = outputs.topk(5, dim=1)
                 correct = topk_preds.eq(labels.view(-1, 1).expand_as(topk_preds))
@@ -137,7 +139,7 @@ def train_model(train_loader, val_loader):
 
         scheduler.step()
 
-        if (epoch + 1) % 2 == 0:
+        if (epoch + 1) % 1 == 0:
             checkpoint_path = os.path.join(save_dir, f'checkpoint_epoch_{epoch+1}.pth')
             torch.save({
                 'epoch': epoch+1,
@@ -159,7 +161,7 @@ def train_model(train_loader, val_loader):
 def test_model(test_loader, num_classes=1000):
     os.environ["WANDB_MODE"] = "offline"
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    best_model_path = os.path.join('saved_files_resnet', 'best_model.pth')
+    best_model_path = os.path.join('saved_files_inception', 'best_model.pth')
     model = load_model_for_test(best_model_path, device, num_classes=num_classes)
     model.eval()
     all_preds = []
@@ -169,7 +171,7 @@ def test_model(test_loader, num_classes=1000):
     with torch.no_grad():
         for inputs, labels in test_loader:
             inputs, labels = inputs.to(device), labels.to(device)
-            outputs = model(inputs)
+            outputs, _ = model(inputs)
             _, preds = torch.max(outputs, 1) 
 
             all_preds.extend(preds.cpu().numpy())
@@ -196,6 +198,6 @@ def test_model(test_loader, num_classes=1000):
     wandb.finish()
 
 if __name__ == '__main__':  
-    train_loader, val_loader, test_loader = data_loading(batch_size=config_resnet["batch_size"], num_workers=8)
+    train_loader, val_loader, test_loader = data_loading(batch_size=config_inceptionV3["batch_size"], num_workers=8)
     train_model(train_loader, val_loader)
-    test_model(test_loader, num_classes=config_resnet["num_classes"])
+    test_model(test_loader, num_classes=config_inceptionV3["num_classes"])
